@@ -56,6 +56,23 @@ async function loadStarfaitModule() {
   return namespace.default || namespace;
 }
 
+// Helper to create a proxy that logs every method/property accessed by Wasm
+function createLoggingProxy(label, target) {
+  return new Proxy(target, {
+    get(obj, prop) {
+      console.log(`[Wasm Handle Inspect (${label})] Accessed ->`, prop);
+      const val = Reflect.get(obj, prop);
+      if (typeof val === "function") {
+        return function(...args) {
+          console.log(`[Wasm Handle Inspect (${label})] Called -> ${String(prop)} with args:`, args);
+          return val.apply(this, args);
+        };
+      }
+      return val;
+    }
+  });
+}
+
 async function startGame() {
   if (startPromise) return startPromise;
 
@@ -79,12 +96,14 @@ async function startGame() {
       log("Game archive loaded (" + gameBytes.byteLength.toLocaleString() + " bytes).");
 
       startupStage = "Starfait createRunner";
-      log("Creating Starfait runner with mock handles...");
+      log("Creating Starfait runner with inspected mock handles...");
 
-      const mockGameFileHandle = {
+      const rawGameFileHandle = {
         kind: "file",
         name: manifest.game.name || "game.unx",
-        isSameEntry: async (other) => other === mockGameFileHandle,
+        isSameEntry: async (other) => other === rawGameFileHandle,
+        queryPermission: async () => "granted",
+        requestPermission: async () => "granted",
         getFile: async () => ({
           size: gameBytes.byteLength,
           type: "application/octet-stream",
@@ -94,15 +113,23 @@ async function startGame() {
         })
       };
 
-      const mockSavesDirHandle = {
+      const rawSavesDirHandle = {
         kind: "directory",
         name: "saves",
-        getDirectoryHandle: async () => mockSavesDirHandle,
-        getFileHandle: async () => mockGameFileHandle,
+        isSameEntry: async (other) => other === rawSavesDirHandle,
+        queryPermission: async () => "granted",
+        requestPermission: async () => "granted",
+        getDirectoryHandle: async () => rawSavesDirHandle,
+        getFileHandle: async () => rawGameFileHandle,
+        removeEntry: async () => {},
+        resolve: async () => [],
         values: async function* () {},
         entries: async function* () {},
         [Symbol.asyncIterator]: async function* () {}
       };
+
+      const mockGameFileHandle = createLoggingProxy("FileHandle", rawGameFileHandle);
+      const mockSavesDirHandle = createLoggingProxy("DirHandle", rawSavesDirHandle);
 
       const result = await starfait.createRunner(
         mockGameFileHandle,
