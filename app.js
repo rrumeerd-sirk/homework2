@@ -71,9 +71,9 @@ async function startGame() {
 
       startupStage = "fetching game archive";
       log("Downloading game archive into memory...");
-      const gameResponse = await fetch(makeAssetUrl(manifest.game.path), { cache: "no-store" });
+      const gameResponse = await fetch(new URL(manifest.game.path, import.meta.url), { cache: "no-store" });
       if (!gameResponse.ok) {
-        throw new Error("Failed to download game.unx (HTTP " + gameResponse.status + ")");
+        throw new Error("Failed to download game archive (HTTP " + gameResponse.status + ")");
       }
       const gameBytes = await gameResponse.arrayBuffer();
       log("Game archive loaded (" + gameBytes.byteLength.toLocaleString() + " bytes).");
@@ -81,7 +81,6 @@ async function startGame() {
       startupStage = "Starfait createRunner";
       log("Creating Starfait runner with mock handle...");
 
-      // Construct a mock FileSystemFileHandle wrapper that satisfies Wasm lookups
       const mockGameFileHandle = {
         kind: "file",
         name: manifest.game.name || "game.unx",
@@ -96,8 +95,8 @@ async function startGame() {
       };
 
       const result = await starfait.createRunner(
-        mockGameFileHandle, // Pass the mock file handle directly
-        null,               // Saves handle placeholder
+        mockGameFileHandle,
+        null,
         mockGameFileHandle.name,
         canvas
       );
@@ -127,8 +126,7 @@ async function startGame() {
 
   return startPromise;
 }
-  return startPromise;
-}
+
 // UI event listeners
 if (debugToggle) {
   debugToggle.addEventListener("click", () => {
