@@ -342,14 +342,18 @@ async function startGame() {
       const gameBytes = await gameResponse.arrayBuffer();
       log("Game archive loaded into memory (" + gameBytes.byteLength.toLocaleString() + " bytes).");
 
-      startupStage = "Starfait createRunner";
-      log("Creating Starfait runner with memory buffers…");
+      // Register the buffer globally or in a lookup so any virtual file reader can grab it
+      window.__hmmMemoryFiles = window.__hmmMemoryFiles || new Map();
+      window.__hmmMemoryFiles.set("game.unx", gameBytes);
 
-      // Pass empty strings or memory flags if supported, or register the buffer directly if starfait exposes an alternative method
+      startupStage = "Starfait createRunner";
+      log("Creating Starfait runner...");
+
+      // Pass standard string arguments expected by the Wasm signature
       const result = await starfait.createRunner(
-        "",
-        "",
-        gameBytes, // Passing the raw ArrayBuffer instead of a directory name
+        "hmm-memory-bundle",
+        "hmm-memory-saves",
+        "game.unx",
         canvas
       );
 
@@ -381,6 +385,8 @@ async function startGame() {
     }
   })();
 
+  return startPromise;
+}
   return startPromise;
 }
 const FALLBACK_KEY_CODES = {
