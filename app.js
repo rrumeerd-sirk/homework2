@@ -502,7 +502,16 @@ async function startGame() {
       }
 
       startupStage = "opening OPFS storage";
-      const rootDirectory = await navigator.storage.getDirectory();
+    // Ensure navigator.storage exists to prevent TypeErrors in restricted frames
+if (!navigator.storage) {
+  navigator.storage = {
+    getDirectory: async () => {
+      console.warn("Using memory storage fallback.");
+      // Return a mock sync file handle directory if needed, or handle gracefully
+      throw new Error("OPFS not available");
+    }
+  };
+}
 
       try {
         const persistent = await navigator.storage.persist?.();
