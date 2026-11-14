@@ -1,4 +1,20 @@
 "use strict";
+// Provide global File System API classes if missing from the environment
+if (typeof window.FileSystemHandle === "undefined") {
+  window.FileSystemHandle = class FileSystemHandle {
+    constructor() { this.kind = "file"; }
+  };
+}
+if (typeof window.FileSystemFileHandle === "undefined") {
+  window.FileSystemFileHandle = class FileSystemFileHandle extends window.FileSystemHandle {
+    constructor() { super(); this.kind = "file"; }
+  };
+}
+if (typeof window.FileSystemDirectoryHandle === "undefined") {
+  window.FileSystemDirectoryHandle = class FileSystemDirectoryHandle extends window.FileSystemHandle {
+    constructor() { super(); this.kind = "directory"; }
+  };
+}
 
 if (!navigator.storage || !navigator.storage.getDirectory) {
   navigator.storage = {
