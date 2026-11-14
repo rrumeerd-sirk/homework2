@@ -79,7 +79,7 @@ async function startGame() {
       log("Game archive loaded (" + gameBytes.byteLength.toLocaleString() + " bytes).");
 
       startupStage = "Starfait createRunner";
-      log("Creating Starfait runner with mock handle...");
+      log("Creating Starfait runner with mock handles...");
 
       const mockGameFileHandle = {
         kind: "file",
@@ -94,9 +94,19 @@ async function startGame() {
         })
       };
 
+      const mockSavesDirHandle = {
+        kind: "directory",
+        name: "saves",
+        getDirectoryHandle: async () => mockSavesDirHandle,
+        getFileHandle: async () => mockGameFileHandle,
+        values: async function* () {},
+        entries: async function* () {},
+        [Symbol.asyncIterator]: async function* () {}
+      };
+
       const result = await starfait.createRunner(
         mockGameFileHandle,
-        null,
+        mockSavesDirHandle,
         mockGameFileHandle.name,
         canvas
       );
