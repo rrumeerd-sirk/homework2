@@ -1,32 +1,31 @@
 "use strict";
 
-// Ensure navigator.storage exists with a safe OPFS mock to prevent Wasm NullPointerExceptions
+// Robust mock for storage/directory handles to satisfy Starfait's internal .values() calls
 if (!navigator.storage || !navigator.storage.getDirectory) {
-  const memoryFiles = new Map();
-  const memoryDirs = new Map();
-
   navigator.storage = {
     getDirectory: async () => {
-      return {
+      const mockDir = {
         kind: "directory",
         name: "",
-        getDirectoryHandle: async (name) => {
-          if (!memoryDirs.has(name)) memoryDirs.set(name, new Map());
-          return { kind: "directory", name };
+        getDirectoryHandle: async () => mockDir,
+        getFileHandle: async () => ({
+          kind: "file",
+          name: "game.unx",
+          getFile: async () => ({ size: 0, text: async () => "" }),
+          createWritable: async () => ({
+            write: async () => {},
+            close: async () => {},
+            abort: async () => {}
+          })
+        }),
+        values: function* () {
+          yield* [];
         },
-        getFileHandle: async (name) => {
-          return {
-            kind: "file",
-            name,
-            getFile: async () => ({ size: 0, text: async () => "" }),
-            createWritable: async () => ({
-              write: async () => {},
-              close: async () => {},
-              abort: async () => {}
-            })
-          };
+        entries: function* () {
+          yield* [];
         }
       };
+      return mockDir;
     },
     persist: async () => true,
     persisted: async () => true
