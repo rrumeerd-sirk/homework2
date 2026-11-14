@@ -72,9 +72,10 @@ async function startGame() {
       startupStage = "Starfait createRunner";
       log("Creating Starfait runner...");
 
+      // Provide virtual root paths instead of empty strings to satisfy Wasm checks
       const result = await starfait.createRunner(
-        "",
-        "",
+        "/virtual-root",
+        "/virtual-saves",
         manifest.game.name || "game.unx",
         canvas
       );
@@ -104,7 +105,6 @@ async function startGame() {
 
   return startPromise;
 }
-
 // UI event listeners
 if (debugToggle) {
   debugToggle.addEventListener("click", () => {
