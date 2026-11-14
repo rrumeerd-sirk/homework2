@@ -1,5 +1,37 @@
 "use strict";
 
+// Ensure navigator.storage exists with a safe OPFS mock to prevent Wasm NullPointerExceptions
+if (!navigator.storage || !navigator.storage.getDirectory) {
+  const memoryFiles = new Map();
+  const memoryDirs = new Map();
+
+  navigator.storage = {
+    getDirectory: async () => {
+      return {
+        kind: "directory",
+        name: "",
+        getDirectoryHandle: async (name) => {
+          if (!memoryDirs.has(name)) memoryDirs.set(name, new Map());
+          return { kind: "directory", name };
+        },
+        getFileHandle: async (name) => {
+          return {
+            kind: "file",
+            name,
+            getFile: async () => ({ size: 0, text: async () => "" }),
+            createWritable: async () => ({
+              write: async () => {},
+              close: async () => {},
+              abort: async () => {}
+            })
+          };
+        }
+      };
+    },
+    persist: async () => true,
+    persisted: async () => true
+  };
+}
 // iPad Safari compatibility: async iterator disposal.
 if (typeof Symbol.asyncDispose !== "symbol") {
   Object.defineProperty(Symbol, "asyncDispose", {
