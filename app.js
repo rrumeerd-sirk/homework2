@@ -1,4 +1,3 @@
-
 "use strict";
 
 // iPad Safari compatibility: async iterator disposal.
@@ -46,9 +45,6 @@ if (globalThis.FileSystemDirectoryHandle) {
 
 const ASSET_MANIFEST = "./asset-manifest.json";
 const STARFAIT_ENTRY = "./runtime/starfait/entry.json";
-const OPFS_BUNDLE_DIR = "hmm-undertale-bundle";
-const OPFS_SAVE_DIR = "hmm-undertale-saves";
-const OPFS_META_DIR = "hmm-undertale-meta";
 
 const $ = (id) => document.getElementById(id);
 const canvas = $("game-canvas");
@@ -244,72 +240,6 @@ async function loadStarfaitModule() {
   return api;
 }
 
-async function getDirectory(parent, name) {
-  return parent.getDirectoryHandle(name, {
-    create: true
-  });
-}
-
-async function writeOPFSFile(directory, name, bytes) {
-  const handle = await directory.getFileHandle(name, {
-    create: true
-  });
-
-  const writable = await handle.createWritable();
-
-  try {
-    await writable.write(bytes);
-    await writable.close();
-  } catch (error) {
-    try {
-      await writable.abort();
-    } catch (_) {}
-
-    throw error;
-  }
-}
-
-async function fileHasExpectedSize(directory, item) {
-  try {
-    const file = await (
-      await directory.getFileHandle(item.name)
-    ).getFile();
-
-    return file.size === item.size;
-  } catch (_) {
-    return false;
-  }
-}
-
-async function isBundleCached(
-  bundleDirectory,
-  metaDirectory,
-  manifest,
-  items
-) {
-  try {
-    const versionFile = await (
-      await metaDirectory.getFileHandle("asset-version.txt")
-    ).getFile();
-
-    const version = (await versionFile.text()).trim();
-
-    if (!manifest.version || version !== manifest.version) {
-      return false;
-    }
-
-    for (const item of items) {
-      if (!(await fileHasExpectedSize(bundleDirectory, item))) {
-        return false;
-      }
-    }
-
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
 function makeAssetUrl(path) {
   const safePath = path
     .split("/")
@@ -317,148 +247,6 @@ function makeAssetUrl(path) {
     .join("/");
 
   return new URL("./" + safePath, import.meta.url);
-}
-
-async function downloadAsset(
-  item,
-  bundleDirectory,
-  label,
-  index,
-  total
-) {
-  const response = await fetch(makeAssetUrl(item.path), {
-    cache: "no-store"
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      "Could not download " + item.path +
-      " (HTTP " + response.status + ")."
-    );
-  }
-
-  const bytes = await response.arrayBuffer();
-
-  if (
-    item.size != null &&
-    bytes.byteLength !== item.size
-  ) {
-    throw new Error(
-      "Size mismatch for " + item.path +
-      ": expected " + item.size +
-      ", got " + bytes.byteLength + "."
-    );
-  }
-
-  await writeOPFSFile(
-    bundleDirectory,
-    item.name,
-    bytes
-  );
-
-  log(
-    "Cached " + label + " " +
-    (index + 1) + "/" + total +
-    ": " + item.name +
-    " (" + bytes.byteLength.toLocaleString() +
-    " bytes)."
-  );
-}
-
-async function cacheGameAssets(manifest, rootDirectory) {
-  if (!manifest.game || manifest.game.name !== "game.unx") {
-    throw new Error("This build has no game.unx archive.");
-  }
-
-  if (!Array.isArray(manifest.music)) {
-    throw new Error("The asset manifest has an invalid music list.");
-  }
-
-  const music = manifest.music.map((item) => {
-    if (
-      !item ||
-      typeof item.path !== "string" ||
-      typeof item.name !== "string" ||
-      item.name.includes("/") ||
-      item.name.includes("\\")
-    ) {
-      throw new Error(
-        "The asset manifest contains an invalid music entry."
-      );
-    }
-
-    return item;
-  });
-
-  const items = [manifest.game, ...music];
-
-  const expectedNames = new Set(
-    items.map((item) => item.name)
-  );
-
-  if (expectedNames.size !== items.length) {
-    throw new Error("Two game assets have the same filename.");
-  }
-
-  const bundleDirectory = await getDirectory(
-    rootDirectory,
-    OPFS_BUNDLE_DIR
-  );
-
-  const metaDirectory = await getDirectory(
-    rootDirectory,
-    OPFS_META_DIR
-  );
-
-  if (
-    await isBundleCached(
-      bundleDirectory,
-      metaDirectory,
-      manifest,
-      items
-    )
-  ) {
-    log(
-      "Game files already exist in this browser's private storage; skipping download."
-    );
-
-    return bundleDirectory;
-  }
-
-  log("Preparing game files in OPFS…");
-
-  for (let index = 0; index < items.length; index += 1) {
-    const item = items[index];
-
-    await downloadAsset(
-      item,
-      bundleDirectory,
-      item === manifest.game ? "game archive" : "audio file",
-      index,
-      items.length
-    );
-  }
-
-  for await (const [name, handle] of bundleDirectory.entries()) {
-    if (
-      handle.kind === "file" &&
-      !expectedNames.has(name)
-    ) {
-      await bundleDirectory.removeEntry(name);
-    }
-  }
-
-  await writeOPFSFile(
-    metaDirectory,
-    "asset-version.txt",
-    new TextEncoder().encode(
-      String(manifest.version || "")
-    )
-  );
-
-  log("Game assets cached.");
-
-  return bundleDirectory;
 }
 
 async function unlockAudioFromUserGesture() {
@@ -493,46 +281,7 @@ async function startGame() {
       }
 
       log("Asset manifest loaded.");
-
-      startupStage = "checking OPFS support";
-
-      // Patched: Bypass strict OPFS throw so the game boots in sandboxed/restricted contexts
-      if (!navigator.storage?.getDirectory) {
-        console.warn("OPFS not supported in this browser context. Bypassing check to allow boot.");
-      }
-
-      startupStage = "opening OPFS storage";
-    // Ensure navigator.storage exists to prevent TypeErrors in restricted frames
-if (!navigator.storage) {
-  navigator.storage = {
-    getDirectory: async () => {
-      console.warn("Using memory storage fallback.");
-      // Return a mock sync file handle directory if needed, or handle gracefully
-      throw new Error("OPFS not available");
-    }
-  };
-}
-
-      try {
-        const persistent = await navigator.storage.persist?.();
-
-        log(
-          persistent
-            ? "Persistent browser storage granted."
-            : "Browser storage is available; persistence may depend on browser policy."
-        );
-      } catch (error) {
-        log(
-          "Could not request persistent storage: " +
-          describeError(error)
-        );
-      }
-
-      startupStage = "caching game assets";
-      await cacheGameAssets(manifest, rootDirectory);
-
-      startupStage = "opening save directory";
-      await getDirectory(rootDirectory, OPFS_SAVE_DIR);
+      log("OPFS checks removed. Bypassing storage setup.");
 
       startupStage = "Starfait createRunner";
 
@@ -544,8 +293,8 @@ if (!navigator.storage) {
       log("Calling Starfait createRunner now…");
 
       const result = await starfait.createRunner(
-        OPFS_BUNDLE_DIR,
-        OPFS_SAVE_DIR,
+        "",
+        "",
         "game.unx",
         canvas
       );
@@ -755,6 +504,6 @@ log(
 
 log("F1 = debug log. F2 = fullscreen.");
 
-log("Game files and saves use OPFS. Runner: Starfait.");
+log("OPFS checks removed. Runner: Starfait.");
 
 startGame().catch(() => {});
