@@ -69,14 +69,36 @@ async function startGame() {
       const manifest = await fetchJson(ASSET_MANIFEST);
       log("Asset manifest loaded.");
 
-      startupStage = "Starfait createRunner";
-      log("Creating Starfait runner...");
+      startupStage = "fetching game archive";
+      log("Downloading game archive into memory...");
+      const gameResponse = await fetch(makeAssetUrl(manifest.game.path), { cache: "no-store" });
+      if (!gameResponse.ok) {
+        throw new Error("Failed to download game.unx (HTTP " + gameResponse.status + ")");
+      }
+      const gameBytes = await gameResponse.arrayBuffer();
+      log("Game archive loaded (" + gameBytes.byteLength.toLocaleString() + " bytes).");
 
-      // Provide virtual root paths instead of empty strings to satisfy Wasm checks
+      startupStage = "Starfait createRunner";
+      log("Creating Starfait runner with mock handle...");
+
+      // Construct a mock FileSystemFileHandle wrapper that satisfies Wasm lookups
+      const mockGameFileHandle = {
+        kind: "file",
+        name: manifest.game.name || "game.unx",
+        isSameEntry: async (other) => other === mockGameFileHandle,
+        getFile: async () => ({
+          size: gameBytes.byteLength,
+          type: "application/octet-stream",
+          arrayBuffer: async () => gameBytes,
+          text: async () => new TextDecoder().decode(gameBytes),
+          slice: (start, end) => gameBytes.slice(start, end)
+        })
+      };
+
       const result = await starfait.createRunner(
-        "/virtual-root",
-        "/virtual-saves",
-        manifest.game.name || "game.unx",
+        mockGameFileHandle, // Pass the mock file handle directly
+        null,               // Saves handle placeholder
+        mockGameFileHandle.name,
         canvas
       );
 
@@ -103,6 +125,8 @@ async function startGame() {
     }
   })();
 
+  return startPromise;
+}
   return startPromise;
 }
 // UI event listeners
