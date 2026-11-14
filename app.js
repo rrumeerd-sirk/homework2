@@ -69,8 +69,30 @@ async function startGame() {
       const manifest = await fetchJson(ASSET_MANIFEST);
       log("Asset manifest loaded.");
 
+      startupStage = "Starfait createRunner";
+      log("Creating Starfait runner...");
+
+      const result = await starfait.createRunner(
+        "",
+        "",
+        manifest.game.name || "game.unx",
+        canvas
+      );
+
+      log("Starfait createRunner returned: " + String(result));
+
+      if (result === false) {
+        throw new Error("Starfait refused to initialise the game archive.");
+      }
+
+      startupStage = "Starfait startRunner";
+      starfait.startRunner(() => log("Starfait game loop ended."));
+
+      runnerStarted = true;
+      canvas.focus();
+      log("Runner started successfully.");
+
       startupStage = "completed";
-      log("Initialization checks passed.");
     } catch (error) {
       const errMessage = "BOOT ERROR during: " + startupStage + " -> " + describeError(error);
       console.error(errMessage, error);
@@ -82,6 +104,27 @@ async function startGame() {
 
   return startPromise;
 }
+
+// UI event listeners
+if (debugToggle) {
+  debugToggle.addEventListener("click", () => {
+    if (debugPanel) setDebugVisible(debugPanel.hidden);
+  });
+}
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "F1") {
+    e.preventDefault();
+    if (debugPanel) setDebugVisible(debugPanel.hidden);
+  } else if (e.key === "F2") {
+    e.preventDefault();
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  }
+});
 
 // Kick off
 startGame().catch((err) => {
