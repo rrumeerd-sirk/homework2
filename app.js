@@ -318,7 +318,7 @@ async function startGame() {
 
   startPromise = (async () => {
     try {
-      log("Starting Undertale webport…");
+      log("Starting Undertale webport (Memory Mode)…");
 
       startupStage = "loading Starfait module";
       starfait = await loadStarfaitModule();
@@ -331,42 +331,40 @@ async function startGame() {
       }
 
       log("Asset manifest loaded.");
-      log("OPFS checks removed. Bypassing storage setup.");
+
+      startupStage = "fetching game archive into memory";
+      log("Downloading game.unx directly via fetch...");
+      
+      const gameResponse = await fetch(makeAssetUrl(manifest.game.path), { cache: "no-store" });
+      if (!gameResponse.ok) {
+        throw new Error("Failed to download game.unx (HTTP " + gameResponse.status + ")");
+      }
+      const gameBytes = await gameResponse.arrayBuffer();
+      log("Game archive loaded into memory (" + gameBytes.byteLength.toLocaleString() + " bytes).");
 
       startupStage = "Starfait createRunner";
+      log("Creating Starfait runner with memory buffers…");
 
-      log("Creating Starfait runner…");
-      log("Browser: " + navigator.userAgent);
-      log("WebAssembly: " + typeof WebAssembly);
-      log("WebGL2: " + Boolean(canvas.getContext("webgl2")));
-
-      log("Calling Starfait createRunner now…");
-
+      // Pass empty strings or memory flags if supported, or register the buffer directly if starfait exposes an alternative method
       const result = await starfait.createRunner(
         "",
         "",
-        "game.unx",
+        gameBytes, // Passing the raw ArrayBuffer instead of a directory name
         canvas
       );
 
       log("Starfait createRunner returned: " + String(result));
 
       if (result === false) {
-        throw new Error(
-          "Starfait refused to initialise the game archive."
-        );
+        throw new Error("Starfait refused to initialise the game archive.");
       }
 
       startupStage = "Starfait startRunner";
-
-      starfait.startRunner(
-        () => log("Starfait game loop ended.")
-      );
+      starfait.startRunner(() => log("Starfait game loop ended."));
 
       runnerStarted = true;
       canvas.focus();
-
-      log("Runner started. Keyboard input is ready.");
+      log("Runner started successfully.");
 
       startupStage = "completed";
     } catch (error) {
@@ -374,33 +372,8 @@ async function startGame() {
       log("Error summary: " + describeError(error));
       log(describeThrownValue(error));
 
-      try {
-        if (error && error.stack) {
-          log("Stack: " + String(error.stack));
-        }
-      } catch (_) {
-        log("Stack could not be read.");
-      }
-
-      if (startupStage === "Starfait createRunner") {
-        try {
-          if (
-            starfait &&
-            typeof starfait.getCreateRunnerDiagnostic === "function"
-          ) {
-            log("Starfait internal diagnostic:");
-            log(starfait.getCreateRunnerDiagnostic());
-          } else {
-            log(
-              "Starfait internal diagnostic export unavailable."
-            );
-          }
-        } catch (diagnosticError) {
-          log(
-            "Could not read Starfait internal diagnostic: " +
-            describeError(diagnosticError)
-          );
-        }
+      if (error && error.stack) {
+        log("Stack: " + String(error.stack));
       }
 
       setDebugVisible(true);
@@ -410,7 +383,6 @@ async function startGame() {
 
   return startPromise;
 }
-
 const FALLBACK_KEY_CODES = {
   ArrowLeft: 37,
   ArrowUp: 38,
