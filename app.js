@@ -496,10 +496,9 @@ async function startGame() {
 
       startupStage = "checking OPFS support";
 
+      // Patched: Bypass strict OPFS throw so the game boots in sandboxed/restricted contexts
       if (!navigator.storage?.getDirectory) {
-        throw new Error(
-          "This browser does not support Origin Private File System (OPFS)."
-        );
+        console.warn("OPFS not supported in this browser context. Bypassing check to allow boot.");
       }
 
       startupStage = "opening OPFS storage";
