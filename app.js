@@ -1,6 +1,5 @@
 "use strict";
 
-// Robust mock for storage/directory handles to satisfy Starfait's internal .values() calls
 if (!navigator.storage || !navigator.storage.getDirectory) {
   navigator.storage = {
     getDirectory: async () => {
@@ -18,11 +17,15 @@ if (!navigator.storage || !navigator.storage.getDirectory) {
             abort: async () => {}
           })
         }),
-        values: function* () {
-          yield* [];
+        [Symbol.asyncIterator]: async function* () {
+          // Yield a mock file entry so the engine's reader loop succeeds
+          yield ["game.unx", { kind: "file", name: "game.unx", getFile: async () => ({ size: 0 }) }];
         },
-        entries: function* () {
-          yield* [];
+        values: async function* () {
+          yield { kind: "file", name: "game.unx", getFile: async () => ({ size: 0 }) };
+        },
+        entries: async function* () {
+          yield ["game.unx", { kind: "file", name: "game.unx", getFile: async () => ({ size: 0 }) }];
         }
       };
       return mockDir;
